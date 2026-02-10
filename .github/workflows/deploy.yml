@@ -3,6 +3,9 @@ name: Deploy to GitHub Pages
 on:
   push:
     branches: ["main"]
+  workflow_run:
+    workflows: ["Fetch metals data"]
+    types: [completed]
   workflow_dispatch:
 
 permissions:
@@ -16,6 +19,12 @@ concurrency:
 
 jobs:
   build:
+    # Só roda se:
+    # - foi push na main, OU
+    # - foi workflow_run e o fetch concluiu com sucesso
+    if: |
+      github.event_name == 'push' ||
+      (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success')
     runs-on: ubuntu-latest
 
     steps:

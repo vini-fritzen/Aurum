@@ -2,7 +2,7 @@ name: Fetch metals data
 
 on:
   schedule:
-    - cron: "*/5 * * * *" # a cada 5 minuto
+    - cron: "*/5 * * * *" # GitHub executa ~a cada 5 min (best effort)
   workflow_dispatch:
 
 permissions:

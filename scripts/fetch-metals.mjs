@@ -9,7 +9,7 @@ const METALS = [
   { apiSymbol: "XAG", outSymbol: "XAG", name: "Prata" },
   { apiSymbol: "XPT", outSymbol: "XPT", name: "Platina" },
   { apiSymbol: "XPD", outSymbol: "XPD", name: "Paládio" },
-  { apiSymbol: "HG",  outSymbol: "XCU", name: "Cobre" }, // gold-api usa HG para copper
+  { apiSymbol: "HG",  outSymbol: "XCU", name: "Cobre" },
 ];
 
 const nowSec = () => Math.floor(Date.now() / 1000);

@@ -27,33 +27,51 @@ type Latest = {
 const UI_REFRESH_MS = 30_000;
 
 export function Dashboard() {
+  // loading: usado apenas no primeiro carregamento (skeleton)
   const [loading, setLoading] = useState(true);
+  // refreshing: usado para refresh manual/intervalo sem “piscar” skeleton
+  const [refreshing, setRefreshing] = useState(false);
+
   const [err, setErr] = useState<string | null>(null);
   const [latest, setLatest] = useState<Latest | null>(null);
 
-  const load = useCallback(async () => {
-    setLoading(true);
+  const load = useCallback(async (opts?: { silent?: boolean }) => {
+    const silent = opts?.silent ?? false;
+
+    if (silent) setRefreshing(true);
+    else setLoading(true);
+
     setErr(null);
+
     try {
       const base = basePath();
-      const res = await fetch(`${base}/data/latest.json?ts=${Date.now()}`, { cache: "no-store" });
+      const res = await fetch(`${base}/data/latest.json?ts=${Date.now()}`, {
+        cache: "no-store",
+      });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = (await res.json()) as Latest;
       setLatest(data);
     } catch (e: any) {
       setErr(e?.message ?? "Erro ao carregar dados");
     } finally {
-      setLoading(false);
+      if (silent) setRefreshing(false);
+      else setLoading(false);
     }
   }, []);
 
   useEffect(() => {
+    // 1) Carregamento inicial (com skeleton)
     load();
-    const id = setInterval(load, UI_REFRESH_MS);
+
+    // 2) Atualização periódica “silenciosa” (sem skeleton)
+    const id = setInterval(() => load({ silent: true }), UI_REFRESH_MS);
     return () => clearInterval(id);
   }, [load]);
 
-  const lastUpdated = useMemo(() => formatTime(latest?.timestamp ?? null), [latest?.timestamp]);
+  const lastUpdated = useMemo(
+    () => formatTime(latest?.timestamp ?? null),
+    [latest?.timestamp]
+  );
 
   const cards = useMemo(() => {
     if (!latest) return [];
@@ -72,14 +90,18 @@ export function Dashboard() {
   const ratio = useMemo(() => {
     const gold = latest?.metals?.XAU?.usd_oz ?? null;
     const silver = latest?.metals?.XAG?.usd_oz ?? null;
-    if (!gold || !silver) return null;
+    if (gold == null || silver == null) return null;
     if (gold <= 0 || silver <= 0) return null;
     return gold / silver;
   }, [latest]);
 
   return (
     <div className="space-y-6">
-      <TopBar lastUpdated={lastUpdated} onRefresh={load} isRefreshing={loading} />
+      <TopBar
+        lastUpdated={lastUpdated}
+        onRefresh={() => load({ silent: true })}
+        isRefreshing={refreshing}
+      />
 
       {err ? (
         <div className="glass rounded-xl2 p-5">
@@ -115,10 +137,13 @@ export function Dashboard() {
       <div className="glass rounded-xl2 p-5">
         <div className="flex items-baseline justify-between">
           <h2 className="text-lg font-semibold">Como funciona</h2>
-          <div className="text-xs muted">UI: {Math.round(UI_REFRESH_MS / 1000)}s • Actions: 5 min</div>
+          <div className="text-xs muted">
+            UI: {Math.round(UI_REFRESH_MS / 1000)}s • Actions: ~5 min
+          </div>
         </div>
         <div className="mt-3 text-sm muted leading-relaxed">
-          O GitHub Actions coleta preços e câmbio, salva histórico em <code className="text-white/80">public/data</code> e o site só lê esses JSONs.
+          O GitHub Actions coleta preços e câmbio, salva histórico em{" "}
+          <code className="text-white/80">public/data</code> e o site só lê esses JSONs.
           Sem banco, sem localStorage, sem chave.
         </div>
       </div>

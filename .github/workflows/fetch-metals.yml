@@ -2,7 +2,7 @@ name: Fetch metals data
 
 on:
   schedule:
-    - cron: "* * * * *" # a cada 1 minuto
+    - cron: "*/5 * * * *" # a cada 5 minuto
   workflow_dispatch:
 
 permissions:

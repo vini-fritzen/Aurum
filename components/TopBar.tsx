@@ -33,7 +33,7 @@ export function TopBar({
         className="group relative overflow-hidden rounded-xl2 border border-white/10 px-4 py-2 text-sm font-medium
                    bg-white/5 hover:bg-white/10 transition disabled:opacity-60"
       >
-        <span className="relative z-10">{isRefreshing ? "Atualizando..." : "Atualizar"}</span>
+        <span className="relative z-10">{isRefreshing ? "Recarregando..." : "Recarregar"}</span>
         <span
           className="absolute inset-0 opacity-0 group-hover:opacity-100 transition
                      bg-[radial-gradient(700px_180px_at_50%_0%,rgba(216,189,113,.28),transparent_55%)]"

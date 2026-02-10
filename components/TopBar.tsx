@@ -13,7 +13,7 @@ export function TopBar({
     <div className="glass rounded-xl2 px-5 py-4 flex items-center justify-between">
       <div className="flex items-center gap-8">
         <Image
-          src="/aurum-icon.png"
+          src="aurum-icon.png"
           alt="AURUM"
           width={65}
           height={65}

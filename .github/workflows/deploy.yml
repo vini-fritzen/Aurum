@@ -34,12 +34,12 @@ jobs:
       - name: Build (Next)
         run: npm run build
         env:
-          NEXT_PUBLIC_BASE_PATH: /aurum
+          NEXT_PUBLIC_BASE_PATH: /${{ github.event.repository.name }}
 
       - name: Export (static)
         run: npm run export
         env:
-          NEXT_PUBLIC_BASE_PATH: /aurum
+          NEXT_PUBLIC_BASE_PATH: /${{ github.event.repository.name }}
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3

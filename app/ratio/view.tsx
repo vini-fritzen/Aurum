@@ -68,7 +68,7 @@ export default function RatioClient() {
   const [series, setSeries] = useState<Point[]>([]);
   const [err, setErr] = useState<string | null>(null);
 
-  const [windowKey, setWindowKey] = useState<WindowKey>("30d");
+  const [windowKey, setWindowKey] = useState<WindowKey>("1h");
   const [openLong, setOpenLong] = useState(false);
 
   const load = async () => {
@@ -110,7 +110,7 @@ export default function RatioClient() {
 
         ratioSeries.push({
           ts: g.ts,
-          usd_oz: ratio, // ✅ ratio reaproveitado
+          usd_oz: ratio,
         });
       }
 
@@ -342,8 +342,7 @@ export default function RatioClient() {
           <div className="mt-6 rounded-xl2 border border-white/10 bg-white/5 p-6">
             <div className="text-sm font-semibold">Coletando histórico…</div>
             <div className="mt-1 text-sm muted">
-              Ainda há poucos pontos ({windowed.length}). Aguarde ou rode{" "}
-              <code className="text-white/80">npm run fetch:data</code>.
+              Ainda há poucos pontos ({windowed.length}). Aguarde...
             </div>
           </div>
         ) : (

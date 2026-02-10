@@ -398,8 +398,7 @@ export default function MetalClient() {
           <div className="mt-6 rounded-xl2 border border-white/10 bg-white/5 p-6">
             <div className="text-sm font-semibold">Coletando histórico…</div>
             <div className="mt-1 text-sm muted">
-              Ainda há poucos pontos ({windowed.length}). Aguarde ou rode{" "}
-              <code className="text-white/80">npm run fetch:data</code>.
+              Ainda há poucos pontos ({windowed.length}). Aguarde...
             </div>
           </div>
         ) : (

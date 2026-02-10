@@ -1,27 +1,101 @@
-# Aurum | Metals Market Analysis
+# AURUM — Precious Metals Intelligence
 
-Dashboard escuro/luxo para acompanhar metais (ouro, prata, platina, paládio, cobre) com histórico e gráficos.
+AURUM é um dashboard de análise de **metais preciosos** focado em **ouro e prata**, com preços em **USD e BRL**, histórico visual, gráficos interativos e o indicador **Gold/Silver Ratio**.
 
-## Sem banco • sem localStorage • sem chaves
-- **GitHub Actions** coleta dados e salva em `public/data/*.json`
-- O site (GitHub Pages) apenas lê os JSONs
+O projeto foi pensado como uma ferramenta de **análise de mercado**, não de trading especulativo, priorizando clareza, elegância visual e arquitetura simples.
 
-## Rodar local
+🔗 **Acesse o projeto:**  
+https://vini-fritzen.github.io/aurum/
+
+---
+
+## ✨ Funcionalidades
+
+- 📊 **Dashboard de Metais**
+  - Ouro (XAU)
+  - Prata (XAG)
+  - Platina (XPT)
+  - Paládio (XPD)
+  - Cobre (XCU)
+- 💱 Preços em **USD e BRL**
+- ⚖️ Valores por **onça (oz)** e **grama (g)**
+- 📈 Gráficos históricos interativos
+  - 30m, 1h, 3h, 6h, 12h, 24h
+  - 7d, 30d, 90d
+- 🔄 Atualização automática (~5 min)
+- 🧮 **Gold / Silver Ratio**
+  - Valor atual
+  - Histórico
+  - Interpretação de mercado
+
+---
+
+## 🧠 Gold / Silver Ratio — O que é?
+
+O **Gold/Silver Ratio** representa quantas onças de prata são necessárias para comprar **1 onça de ouro**.
+
+- 📈 **Ratio alto** → Ouro caro ou prata barata  
+- 📉 **Ratio baixo** → Ouro barato ou prata cara  
+
+🔗 Página dedicada:  
+https://vini-fritzen.github.io/aurum/ratio/
+
+---
+
+## 🏗️ Arquitetura
+
+- Sem banco de dados
+- Sem localStorage
+- Sem autenticação
+- Sem chaves no frontend
+
+### Fluxo:
+1. GitHub Actions coleta dados (~5 min)
+2. Dados são salvos em JSON
+3. Site consome JSONs estaticamente
+
+---
+
+## 🛠️ Stack Técnica
+
+- Next.js 15 (App Router)
+- TypeScript
+- Recharts
+- GitHub Pages
+- GitHub Actions
+- Static Export
+
+---
+
+## 🚀 Rodar localmente
+
 ```bash
-npm i
-npm run fetch:data
+npm install
 npm run dev
 ```
 
-## Deploy no GitHub Pages
-1. Crie repo e faça push
-2. Settings → Pages → Source: GitHub Actions
-3. Edite `.github/workflows/deploy.yml` e troque `NEXT_PUBLIC_BASE_PATH` para `/<NOME_DO_REPO>`
-4. Push na branch `main`
+---
 
-## Atualização automática
-Workflow `Fetch metal data` roda a cada 5 min e commita `public/data` se mudar.
+## 📂 Estrutura de dados
 
-## APIs usadas
-- Metais: `https://api.gold-api.com/price/{symbol}` (XAU/XAG/XPT/XPD e HG para cobre)
-- Câmbio: `https://api.frankfurter.dev/v1/latest?base=USD&symbols=BRL`
+```txt
+public/data/
+  XAU.json
+  XAG.json
+  XPT.json
+  XPD.json
+  XCU.json
+  latest.json
+```
+
+---
+
+## 👤 Autor
+
+Vinícius Fritzen
+
+---
+
+## 📜 Licença
+
+MIT

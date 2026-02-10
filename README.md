@@ -5,7 +5,7 @@ AURUM é um dashboard de análise de **metais preciosos** focado em **ouro e pra
 O projeto foi pensado como uma ferramenta de **análise de mercado**, não de trading especulativo, priorizando clareza, elegância visual e arquitetura simples.
 
 🔗 **Acesse o projeto:**  
-https://vini-fritzen.github.io/aurum/
+https://vini-fritzen.github.io/Aurum/
 
 ---
 
@@ -38,7 +38,7 @@ O **Gold/Silver Ratio** representa quantas onças de prata são necessárias par
 - 📉 **Ratio baixo** → Ouro barato ou prata cara  
 
 🔗 Página dedicada:  
-https://vini-fritzen.github.io/aurum/ratio/
+https://vini-fritzen.github.io/Aurum/ratio/
 
 ---
 

@@ -189,6 +189,7 @@ export default function RatioClient() {
   }, [latestMs, windowCfg.ms]);
 
   const windowed = useMemo(() => filterWindow(normalizedSeries, windowCfg.ms), [normalizedSeries, windowCfg.ms]);
+  const rawWindowed = useMemo(() => filterWindow(series, windowCfg.ms), [series, windowCfg.ms]);
   const shouldDownsample = windowed.length > 250;
 
   const sampled = useMemo(
@@ -285,7 +286,7 @@ export default function RatioClient() {
           <h2 className="text-lg font-semibold">Histórico</h2>
           <div className="text-xs muted">
             {renderData.length} renderizados{shouldDownsample ? " (agregado)" : ""} • janela tem{" "}
-            {windowed.length} pontos reais
+            {rawWindowed.length} pontos reais
           </div>
         </div>
 

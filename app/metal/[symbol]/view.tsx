@@ -212,6 +212,7 @@ export default function MetalClient() {
   }, [latestMs, windowCfg.ms]);
 
   const windowed = useMemo(() => filterWindow(normalizedSeries, windowCfg.ms), [normalizedSeries, windowCfg.ms]);
+  const rawWindowed = useMemo(() => filterWindow(series, windowCfg.ms), [series, windowCfg.ms]);
 
   // Downsample só quando virar “grande”
   const shouldDownsample = windowed.length > 250;
@@ -342,7 +343,7 @@ export default function MetalClient() {
 
           <div>
             <div className="text-xs muted">Histórico</div>
-            <div className="text-sm">{series.length} pontos</div>
+            <div className="text-sm">{rawWindowed.length} pontos reais</div>
             <div className="text-xs muted">janela: {windowKey}</div>
           </div>
         </div>
@@ -353,7 +354,7 @@ export default function MetalClient() {
           <h2 className="text-lg font-semibold">Gráfico ({currency}/{unit})</h2>
           <div className="text-xs muted">
             {renderData.length} renderizados{shouldDownsample ? " (agregado)" : ""} • janela tem{" "}
-            {windowed.length} pontos reais
+            {rawWindowed.length} pontos reais
           </div>
         </div>
 

@@ -15,7 +15,7 @@ import {
 import { basePath } from "@/lib/base";
 import { formatTime } from "@/lib/time";
 import { filterWindow, downsampleAvg, normalizeCadence, type Point } from "@/lib/series";
-import { mergeSeries, readCachedSeries, writeCachedSeries } from "@/lib/historyCache";
+import { mergeSeries } from "@/lib/historyCache";
 
 const UI_REFRESH_MS = 3_000;
 
@@ -90,8 +90,8 @@ export default function RatioClient() {
       if (!goldRes.ok || !silverRes.ok) throw new Error("Histórico indisponível");
       const goldRaw = (await goldRes.json()) as Point[];
       const silverRaw = (await silverRes.json()) as Point[];
-      const gold = mergeSeries(goldRaw, readCachedSeries("XAU"));
-      const silver = mergeSeries(silverRaw, readCachedSeries("XAG"));
+      const gold = mergeSeries(goldRaw, []);
+      const silver = mergeSeries(silverRaw, []);
 
       // indexa prata por timestamp (segundos)
       const silverMap = new Map<number, number>();
@@ -138,15 +138,11 @@ export default function RatioClient() {
           typeof ts === "number" &&
           (!last || last.ts !== ts)
         ) {
-          gold.push({ ts, usd_oz: xau });
-          silver.push({ ts, usd_oz: xag });
           ratioSeries.push({ ts, usd_oz: xau / xag });
         }
       }
       if (!liveRes.ok) setLatestTs(ratioSeries.at(-1)?.ts ?? null);
 
-      writeCachedSeries("XAU", gold);
-      writeCachedSeries("XAG", silver);
       setSeries(mergeSeries(ratioSeries, []));
     } catch (e: any) {
       setErr(e?.message ?? "Erro ao montar série do ratio");

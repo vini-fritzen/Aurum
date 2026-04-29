@@ -15,6 +15,7 @@ import {
 
 import { formatMoney } from "@/lib/metals";
 import { formatTime } from "@/lib/time";
+import { OZ_TROY_TO_GRAM } from "@/lib/metals";
 import {
   filterWindow,
   downsampleAvg,
@@ -40,6 +41,7 @@ type Latest = {
 };
 
 type Currency = "USD" | "BRL";
+type Unit = "oz" | "g";
 
 const UI_REFRESH_MS = 3_000;
 
@@ -111,6 +113,7 @@ export default function MetalClient() {
 
   const [windowKey, setWindowKey] = useState<WindowKey>("1h");
   const [currency, setCurrency] = useState<Currency>("BRL");
+  const [unit, setUnit] = useState<Unit>("oz");
 
   // dropdown custom (>=24h)
   const [openLong, setOpenLong] = useState(false);
@@ -223,9 +226,10 @@ export default function MetalClient() {
     return sampled.map((p) => {
       const usd = p.usd_oz;
       const value = currency === "USD" ? usd : usdToBrl ? usd * usdToBrl : usd;
-      return { ts: p.ts * 1000, price: value };
+      const normalizedValue = unit === "g" ? value / OZ_TROY_TO_GRAM : value;
+      return { ts: p.ts * 1000, price: normalizedValue };
     });
-  }, [sampled, currency, usdToBrl]);
+  }, [sampled, currency, usdToBrl, unit]);
 
   const hasEnough = windowed.length >= 2;
   const yPad = currency === "USD" ? 10 : 50;
@@ -258,20 +262,35 @@ export default function MetalClient() {
             <div className="text-2xl font-semibold">{m?.name ?? symbol}</div>
           </div>
 
-          {/* Toggle USD/BRL */}
-          <div className="flex rounded-xl2 border border-white/10 bg-white/5 p-1">
-            {(["USD", "BRL"] as const).map((c) => (
-              <button
-                key={c}
-                onClick={() => setCurrency(c)}
-                className={[
-                  "px-3 py-1 text-xs rounded-xl2 transition",
-                  currency === c ? "bg-white/10 border border-white/10" : "hover:bg-white/10",
-                ].join(" ")}
-              >
-                {c}
-              </button>
-            ))}
+          <div className="flex items-center gap-2">
+            <div className="flex rounded-xl2 border border-white/10 bg-white/5 p-1">
+              {(["USD", "BRL"] as const).map((c) => (
+                <button
+                  key={c}
+                  onClick={() => setCurrency(c)}
+                  className={[
+                    "px-3 py-1 text-xs rounded-xl2 transition",
+                    currency === c ? "bg-white/10 border border-white/10" : "hover:bg-white/10",
+                  ].join(" ")}
+                >
+                  {c}
+                </button>
+              ))}
+            </div>
+            <div className="flex rounded-xl2 border border-white/10 bg-white/5 p-1">
+              {(["oz", "g"] as const).map((u) => (
+                <button
+                  key={u}
+                  onClick={() => setUnit(u)}
+                  className={[
+                    "px-3 py-1 text-xs rounded-xl2 transition uppercase",
+                    unit === u ? "bg-white/10 border border-white/10" : "hover:bg-white/10",
+                  ].join(" ")}
+                >
+                  {u}
+                </button>
+              ))}
+            </div>
           </div>
         </div>
 
@@ -331,7 +350,7 @@ export default function MetalClient() {
 
       <div className="glass rounded-xl2 p-5">
         <div className="flex items-baseline justify-between">
-          <h2 className="text-lg font-semibold">Gráfico ({currency}/oz)</h2>
+          <h2 className="text-lg font-semibold">Gráfico ({currency}/{unit})</h2>
           <div className="text-xs muted">
             {renderData.length} renderizados{shouldDownsample ? " (agregado)" : ""} • janela tem{" "}
             {windowed.length} pontos reais
@@ -453,7 +472,7 @@ export default function MetalClient() {
                   tickLine={{ stroke: "rgba(255,255,255,0.12)" }}
                   width={72}
                   tickFormatter={(v) =>
-                    currency === "USD" ? `$${Number(v).toFixed(0)}` : `R$ ${Number(v).toFixed(0)}`
+                    currency === "USD" ? `$${Number(v).toFixed(2)}` : `R$ ${Number(v).toFixed(2)}`
                   }
                 />
 
@@ -465,7 +484,7 @@ export default function MetalClient() {
                   }}
                   labelStyle={{ color: "rgba(255,255,255,0.70)" }}
                   labelFormatter={(v) => new Date(Number(v)).toLocaleString("pt-BR")}
-                  formatter={(v) => [formatMoney(Number(v), currency, 2), `${currency}/oz`]}
+                  formatter={(v) => [formatMoney(Number(v), currency, unit === "g" ? 4 : 2), `${currency}/${unit}`]}
                 />
 
                 <Area

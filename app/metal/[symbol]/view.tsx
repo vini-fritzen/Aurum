@@ -194,9 +194,9 @@ export default function MetalClient() {
   const usdToBrl = latest?.usdToBrl ?? 0;
 
   // Variações baseadas no histórico em USD (percentual é o mesmo em BRL)
-  const chg1h = useMemo(() => computeChange(series, 60 * 60 * 1000), [series]);
-  const chg24h = useMemo(() => computeChange(series, 24 * 60 * 60 * 1000), [series]);
-  const chg7d = useMemo(() => computeChange(series, 7 * 24 * 60 * 60 * 1000), [series]);
+  const chg1h = useMemo(() => computeChange(normalizedSeries, 60 * 60 * 1000), [normalizedSeries]);
+  const chg24h = useMemo(() => computeChange(normalizedSeries, 24 * 60 * 60 * 1000), [normalizedSeries]);
+  const chg7d = useMemo(() => computeChange(normalizedSeries, 7 * 24 * 60 * 60 * 1000), [normalizedSeries]);
 
   // ======================
   // Janela + domínio X fixo (para “zoom” mudar só o bucket, não o período)

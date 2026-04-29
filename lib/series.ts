@@ -57,3 +57,33 @@ export function computeChange(points: Point[], ageMs: number) {
 
   return pctChange(best.usd_oz, latest.usd_oz);
 }
+
+export function normalizeCadence(points: Point[], stepSec = 10, maxGapSec = 30 * 60) {
+  if (points.length <= 1) return points;
+
+  const sorted = [...points]
+    .filter((p) => Number.isFinite(p.ts) && Number.isFinite(p.usd_oz))
+    .sort((a, b) => a.ts - b.ts);
+
+  const out: Point[] = [sorted[0]];
+
+  for (let i = 1; i < sorted.length; i++) {
+    const prev = out[out.length - 1];
+    const curr = sorted[i];
+    const gap = curr.ts - prev.ts;
+
+    if (gap > stepSec && gap <= maxGapSec) {
+      const steps = Math.floor(gap / stepSec);
+      for (let s = 1; s < steps; s++) {
+        out.push({
+          ts: prev.ts + s * stepSec,
+          usd_oz: prev.usd_oz,
+        });
+      }
+    }
+
+    out.push(curr);
+  }
+
+  return out;
+}

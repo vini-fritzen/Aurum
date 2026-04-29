@@ -1,19 +1,19 @@
 import type { NextConfig } from "next";
 
 /**
- * Para GitHub Pages (https://usuario.github.io/REPO):
- * defina NEXT_PUBLIC_BASE_PATH="/REPO" no workflow deploy.yml.
- * Em dev, fica vazio.
+ * GitHub Pages: defina NEXT_PUBLIC_BASE_PATH="/REPO" e NEXT_PUBLIC_STATIC_EXPORT="1".
+ * Vercel: `VERCEL=1` desabilita basePath/export para manter rotas server-side (/api).
  */
-const basePath = process.env.NEXT_PUBLIC_BASE_PATH || "";
+const isVercel = process.env.VERCEL === "1";
+const basePath = isVercel ? "" : process.env.NEXT_PUBLIC_BASE_PATH || "";
+const staticExport = !isVercel && process.env.NEXT_PUBLIC_STATIC_EXPORT === "1";
 
 const nextConfig: NextConfig = {
-  output: "export",
+  ...(staticExport ? { output: "export" as const } : {}),
   images: { unoptimized: true },
   basePath,
   assetPrefix: basePath,
   trailingSlash: true,
-  // Opcional: evita warning se você abrir via IP na rede
   allowedDevOrigins: [
     "http://localhost:3000",
     "http://127.0.0.1:3000",

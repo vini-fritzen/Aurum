@@ -22,7 +22,8 @@ https://vini-fritzen.github.io/Aurum/
 - 📈 Gráficos históricos interativos
   - 30m, 1h, 3h, 6h, 12h, 24h
   - 7d, 30d, 90d
-- 🔄 Atualização automática (~5 min)
+- ⚡ Atualização em tempo real no cliente (~3s)
+- 🛟 Fallback automático para JSON estático (~5 min via GitHub Actions)
 - 🧮 **Gold / Silver Ratio**
   - Valor atual
   - Histórico
@@ -50,9 +51,24 @@ https://vini-fritzen.github.io/Aurum/ratio/
 - Sem chaves no frontend
 
 ### Fluxo:
-1. GitHub Actions coleta dados (~5 min)
-2. Dados são salvos em JSON
-3. Site consome JSONs estaticamente
+1. Frontend consulta APIs de metais + câmbio em tempo real (~3s)
+2. Se houver falha externa, o app usa JSON estático em `public/data`
+3. GitHub Actions continua atualizando o fallback (~5 min)
+
+
+## ☁️ Deploy (Vercel e GitHub Pages)
+
+- **Vercel (recomendado para tempo real):** não defina `NEXT_PUBLIC_STATIC_EXPORT`. Assim, a rota ` /api/live/latest ` roda no servidor e evita bloqueios de CORS/rate limit no navegador.
+- **GitHub Pages (estático):** defina `NEXT_PUBLIC_STATIC_EXPORT=1` e `NEXT_PUBLIC_BASE_PATH=/Aurum`.
+
+
+
+### Troubleshooting (Vercel)
+
+Se no Vercel "não está vindo" cotação ao vivo, verifique:
+- **NÃO** definir `NEXT_PUBLIC_STATIC_EXPORT=1` no projeto Vercel
+- **NÃO** definir `NEXT_PUBLIC_BASE_PATH=/Aurum` no projeto Vercel
+- A rota `https://SEU_DOMINIO/api/live/latest` deve responder JSON
 
 ---
 

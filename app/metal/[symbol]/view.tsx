@@ -24,6 +24,7 @@ import {
   type Point,
 } from "@/lib/series";
 import { basePath } from "@/lib/base";
+import { mergeSeries, readCachedSeries, writeCachedSeries } from "@/lib/historyCache";
 
 type Latest = {
   timestamp: number;
@@ -139,7 +140,7 @@ export default function MetalClient() {
       const seriesJson = (await b.json()) as Point[];
 
       setLatest(latestJson);
-      const nextSeries = Array.isArray(seriesJson) ? [...seriesJson] : [];
+      const nextSeries = mergeSeries(Array.isArray(seriesJson) ? seriesJson : [], readCachedSeries(symbol));
       const liveUsd = latestJson?.metals?.[symbol]?.usd_oz;
       const liveTs = latestJson?.timestamp;
       const last = nextSeries[nextSeries.length - 1];
@@ -151,7 +152,9 @@ export default function MetalClient() {
       ) {
         nextSeries.push({ ts: liveTs, usd_oz: liveUsd });
       }
-      setSeries(nextSeries);
+      const merged = mergeSeries(nextSeries, []);
+      writeCachedSeries(symbol, merged);
+      setSeries(merged);
     } catch (e: any) {
       setErr(e?.message ?? "Erro ao carregar");
     }

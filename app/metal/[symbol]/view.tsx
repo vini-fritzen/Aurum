@@ -225,8 +225,12 @@ export default function MetalClient() {
     });
   }, [sampled, currency, usdToBrl]);
 
-  const hasEnough = windowed.length >= 12;
+  const hasEnough = windowed.length >= 2;
   const yPad = currency === "USD" ? 10 : 50;
+  const renderData =
+    chartData.length === 1
+      ? [{ ...chartData[0], ts: chartData[0].ts - 1000 }, chartData[0]]
+      : chartData;
   
 
   // label atual do dropdown longo
@@ -327,7 +331,7 @@ export default function MetalClient() {
         <div className="flex items-baseline justify-between">
           <h2 className="text-lg font-semibold">Gráfico ({currency}/oz)</h2>
           <div className="text-xs muted">
-            {chartData.length} renderizados{shouldDownsample ? " (agregado)" : ""} • janela tem{" "}
+            {renderData.length} renderizados{shouldDownsample ? " (agregado)" : ""} • janela tem{" "}
             {windowed.length} pontos reais
           </div>
         </div>
@@ -417,7 +421,7 @@ export default function MetalClient() {
         ) : (
           <div className="mt-4 h-80">
             <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={chartData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+              <AreaChart data={renderData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
                 <defs>
                   <linearGradient id="goldFill" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="0%" stopColor="rgba(216,189,113,0.45)" />
@@ -477,8 +481,8 @@ export default function MetalClient() {
         )}
 
         <div className="mt-3 text-xs muted">
-          Fonte: <code className="text-white/80">public/data/{symbol}.json</code> • conversão via{" "}
-          <code className="text-white/80">latest.json</code>
+          Fonte: <code className="text-white/80">/api/live/latest</code> +{" "}
+          <code className="text-white/80">public/data/{symbol}.json</code> (fallback/histórico)
         </div>
       </div>
     </main>

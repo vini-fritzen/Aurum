@@ -72,6 +72,7 @@ export default function RatioClient() {
   // vamos usar Point[] reaproveitando usd_oz como "ratio"
   const [series, setSeries] = useState<Point[]>([]);
   const [err, setErr] = useState<string | null>(null);
+  const [latestTs, setLatestTs] = useState<number | null>(null);
 
   const [windowKey, setWindowKey] = useState<WindowKey>("1h");
   const [openLong, setOpenLong] = useState(false);
@@ -124,6 +125,7 @@ export default function RatioClient() {
 
       if (liveRes.ok) {
         const live = (await liveRes.json()) as Latest;
+        setLatestTs(live?.timestamp ?? null);
         const xau = live?.metals?.XAU?.usd_oz;
         const xag = live?.metals?.XAG?.usd_oz;
         const ts = live?.timestamp;
@@ -139,6 +141,7 @@ export default function RatioClient() {
           ratioSeries.push({ ts, usd_oz: xau / xag });
         }
       }
+      if (!liveRes.ok) setLatestTs(ratioSeries.at(-1)?.ts ?? null);
 
       setSeries(ratioSeries);
     } catch (e: any) {
@@ -228,7 +231,7 @@ export default function RatioClient() {
     return typeof last?.usd_oz === "number" ? last.usd_oz : null;
   }, [series]);
 
-  const lastUpdated = useMemo(() => formatTime(series.at(-1)?.ts ?? null), [series]);
+  const lastUpdated = useMemo(() => formatTime(latestTs), [latestTs]);
 
   // dropdown mostra o selecionado (>=24h)
   const longSelectValue: (typeof LONG_WINDOWS)[number]["key"] =
@@ -236,15 +239,11 @@ export default function RatioClient() {
   const longLabel = LONG_WINDOWS.find((w) => w.key === longSelectValue)?.label ?? "24h";
 
   // mínimo de pontos por janela (curtas aceitam menos)
-  const minPoints =
-    windowKey === "30m" ? 3 :
-    windowKey === "1h" ? 4 :
-    windowKey === "3h" ? 6 :
-    windowKey === "6h" ? 8 :
-    windowKey === "12h" ? 10 :
-    12;
-
-  const hasEnough = windowed.length >= minPoints;
+  const hasEnough = windowed.length >= 2;
+  const renderData =
+    chartData.length === 1
+      ? [{ ...chartData[0], ts: chartData[0].ts - 1000 }, chartData[0]]
+      : chartData;
 
   return (
     <main className="mx-auto max-w-6xl px-4 py-8 space-y-6">
@@ -284,7 +283,7 @@ export default function RatioClient() {
         <div className="flex items-baseline justify-between">
           <h2 className="text-lg font-semibold">Histórico</h2>
           <div className="text-xs muted">
-            {chartData.length} renderizados{shouldDownsample ? " (agregado)" : ""} • janela tem{" "}
+            {renderData.length} renderizados{shouldDownsample ? " (agregado)" : ""} • janela tem{" "}
             {windowed.length} pontos reais
           </div>
         </div>
@@ -373,7 +372,7 @@ export default function RatioClient() {
         ) : (
           <div className="mt-4 h-96">
             <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={chartData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+              <AreaChart data={renderData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
                 <defs>
                   <linearGradient id="ratioFill" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="0%" stopColor="rgba(216,189,113,0.45)" />
@@ -431,8 +430,9 @@ export default function RatioClient() {
         )}
 
         <div className="mt-3 text-xs muted">
-          Fonte: <code className="text-white/80">public/data/XAU.json</code> +{" "}
-          <code className="text-white/80">public/data/XAG.json</code> (derivado em tempo de execução)
+          Fonte: <code className="text-white/80">/api/live/latest</code> +{" "}
+          <code className="text-white/80">public/data/XAU.json</code> +{" "}
+          <code className="text-white/80">public/data/XAG.json</code> (fallback/histórico)
         </div>
       </div>
     </main>

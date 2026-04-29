@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import {
   ResponsiveContainer,
@@ -16,7 +16,12 @@ import { basePath } from "@/lib/base";
 import { formatTime } from "@/lib/time";
 import { filterWindow, downsampleAvg, type Point } from "@/lib/series";
 
-const UI_REFRESH_MS = 30_000;
+const UI_REFRESH_MS = 10_000;
+
+type Latest = {
+  timestamp: number;
+  metals: Record<string, { usd_oz: number | null }>;
+};
 
 // Botões (somente < 24h)
 const SHORT_WINDOWS = [
@@ -71,11 +76,12 @@ export default function RatioClient() {
   const [windowKey, setWindowKey] = useState<WindowKey>("1h");
   const [openLong, setOpenLong] = useState(false);
 
-  const load = async () => {
+  const load = useCallback(async () => {
     setErr(null);
     try {
       const base = basePath();
-      const [goldRes, silverRes] = await Promise.all([
+      const [liveRes, goldRes, silverRes] = await Promise.all([
+        fetch(`${base}/api/live/latest?ts=${Date.now()}`, { cache: "no-store" }),
         fetch(`${base}/data/XAU.json?ts=${Date.now()}`, { cache: "no-store" }),
         fetch(`${base}/data/XAG.json?ts=${Date.now()}`, { cache: "no-store" }),
       ]);
@@ -115,17 +121,36 @@ export default function RatioClient() {
       }
 
       ratioSeries.sort((a, b) => a.ts - b.ts);
+
+      if (liveRes.ok) {
+        const live = (await liveRes.json()) as Latest;
+        const xau = live?.metals?.XAU?.usd_oz;
+        const xag = live?.metals?.XAG?.usd_oz;
+        const ts = live?.timestamp;
+        const last = ratioSeries[ratioSeries.length - 1];
+        if (
+          typeof xau === "number" &&
+          typeof xag === "number" &&
+          xau > 0 &&
+          xag > 0 &&
+          typeof ts === "number" &&
+          (!last || last.ts !== ts)
+        ) {
+          ratioSeries.push({ ts, usd_oz: xau / xag });
+        }
+      }
+
       setSeries(ratioSeries);
     } catch (e: any) {
       setErr(e?.message ?? "Erro ao montar série do ratio");
     }
-  };
+  }, []);
 
   useEffect(() => {
     load();
     const id = setInterval(load, UI_REFRESH_MS);
     return () => clearInterval(id);
-  }, []);
+  }, [load]);
 
   // fecha dropdown ao clicar fora / ESC
   useEffect(() => {

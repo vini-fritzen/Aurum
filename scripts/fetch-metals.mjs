@@ -73,9 +73,15 @@ async function main() {
   const t = nowSec();
   const latest = { timestamp: t, usdToBrl, metals: {} };
 
-  for (const m of METALS) {
-    const priceData = await fetchJson(`https://api.gold-api.com/price/${m.apiSymbol}`);
-    const usd_oz = typeof priceData.price === "number" ? priceData.price : null;
+  const livePrices = await Promise.all(
+    METALS.map(async (m) => {
+      const priceData = await fetchJson(`https://api.gold-api.com/price/${m.apiSymbol}`);
+      const usd_oz = typeof priceData.price === "number" ? priceData.price : null;
+      return { m, usd_oz };
+    })
+  );
+
+  for (const { m, usd_oz } of livePrices) {
 
     const usd_g = usd_oz !== null ? usdOzToUsdGram(usd_oz) : null;
     const brl_oz = usd_oz !== null ? usd_oz * usdToBrl : null;
@@ -102,8 +108,6 @@ async function main() {
     writeJson(seriesFile, pruned);
 
     latest.metals[m.outSymbol] = { name: m.name, usd_oz, usd_g, brl_oz, brl_g, chg_1h, chg_24h };
-
-    await new Promise(r => setTimeout(r, 180));
   }
 
   writeJson(path.join(OUT_DIR, "latest.json"), latest);

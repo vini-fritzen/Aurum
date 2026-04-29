@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import {
@@ -15,13 +15,16 @@ import {
 
 import { formatMoney } from "@/lib/metals";
 import { formatTime } from "@/lib/time";
+import { OZ_TROY_TO_GRAM } from "@/lib/metals";
 import {
   filterWindow,
   downsampleAvg,
   computeChange,
+  normalizeCadence,
   type Point,
 } from "@/lib/series";
 import { basePath } from "@/lib/base";
+import { mergeSeries, readCachedSeries, writeCachedSeries } from "@/lib/historyCache";
 
 type Latest = {
   timestamp: number;
@@ -39,8 +42,9 @@ type Latest = {
 };
 
 type Currency = "USD" | "BRL";
+type Unit = "oz" | "g";
 
-const UI_REFRESH_MS = 30_000;
+const UI_REFRESH_MS = 3_000;
 
 // Botões (somente < 24h)
 const SHORT_WINDOWS = [
@@ -110,6 +114,7 @@ export default function MetalClient() {
 
   const [windowKey, setWindowKey] = useState<WindowKey>("1h");
   const [currency, setCurrency] = useState<Currency>("BRL");
+  const [unit, setUnit] = useState<Unit>("oz");
 
   // dropdown custom (>=24h)
   const [openLong, setOpenLong] = useState(false);
@@ -118,33 +123,48 @@ export default function MetalClient() {
   const [series, setSeries] = useState<Point[]>([]);
   const [err, setErr] = useState<string | null>(null);
 
-  const load = async () => {
+  const load = useCallback(async () => {
     setErr(null);
     try {
       const base = basePath();
-      const [a, b] = await Promise.all([
+      const [liveRes, a, b] = await Promise.all([
+        fetch(`${base}/api/live/latest?ts=${Date.now()}`, { cache: "no-store" }),
         fetch(`${base}/data/latest.json?ts=${Date.now()}`, { cache: "no-store" }),
         fetch(`${base}/data/${symbol}.json?ts=${Date.now()}`, { cache: "no-store" }),
       ]);
 
-      if (!a.ok) throw new Error(`latest HTTP ${a.status}`);
       if (!b.ok) throw new Error(`series HTTP ${b.status}`);
 
-      const latestJson = (await a.json()) as Latest;
+      const latestJson =
+        liveRes.ok ? ((await liveRes.json()) as Latest) : ((await a.json()) as Latest);
       const seriesJson = (await b.json()) as Point[];
 
       setLatest(latestJson);
-      setSeries(Array.isArray(seriesJson) ? seriesJson : []);
+      const nextSeries = mergeSeries(Array.isArray(seriesJson) ? seriesJson : [], readCachedSeries(symbol));
+      const liveUsd = latestJson?.metals?.[symbol]?.usd_oz;
+      const liveTs = latestJson?.timestamp;
+      const last = nextSeries[nextSeries.length - 1];
+      if (
+        typeof liveUsd === "number" &&
+        Number.isFinite(liveUsd) &&
+        typeof liveTs === "number" &&
+        (!last || last.ts !== liveTs)
+      ) {
+        nextSeries.push({ ts: liveTs, usd_oz: liveUsd });
+      }
+      const merged = mergeSeries(nextSeries, []);
+      writeCachedSeries(symbol, merged);
+      setSeries(merged);
     } catch (e: any) {
       setErr(e?.message ?? "Erro ao carregar");
     }
-  };
+  }, [symbol]);
 
   useEffect(() => {
     load();
     const id = setInterval(load, UI_REFRESH_MS);
     return () => clearInterval(id);
-  }, [symbol]);
+  }, [load]);
 
   // fecha o dropdown ao clicar fora / ESC (sem quebrar os botões curtos)
   useEffect(() => {
@@ -171,6 +191,7 @@ export default function MetalClient() {
     };
   }, [openLong]);
 
+  const normalizedSeries = useMemo(() => normalizeCadence(series, 5), [series]);
   const m = latest?.metals?.[symbol];
   const usdToBrl = latest?.usdToBrl ?? 0;
 
@@ -185,15 +206,16 @@ export default function MetalClient() {
   const windowCfg = WINDOWS.find((w) => w.key === windowKey) ?? WINDOWS[1];
 
   const latestMs = useMemo(() => {
-    const last = series[series.length - 1];
+    const last = normalizedSeries[normalizedSeries.length - 1];
     return last ? last.ts * 1000 : Date.now();
-  }, [series]);
+  }, [normalizedSeries]);
 
   const xDomain = useMemo<[number, number]>(() => {
     return [latestMs - windowCfg.ms, latestMs];
   }, [latestMs, windowCfg.ms]);
 
-  const windowed = useMemo(() => filterWindow(series, windowCfg.ms), [series, windowCfg.ms]);
+  const windowed = useMemo(() => filterWindow(normalizedSeries, windowCfg.ms), [normalizedSeries, windowCfg.ms]);
+  const rawWindowed = useMemo(() => filterWindow(series, windowCfg.ms), [series, windowCfg.ms]);
 
   // Downsample só quando virar “grande”
   const shouldDownsample = windowed.length > 250;
@@ -208,12 +230,17 @@ export default function MetalClient() {
     return sampled.map((p) => {
       const usd = p.usd_oz;
       const value = currency === "USD" ? usd : usdToBrl ? usd * usdToBrl : usd;
-      return { ts: p.ts * 1000, price: value };
+      const normalizedValue = unit === "g" ? value / OZ_TROY_TO_GRAM : value;
+      return { ts: p.ts * 1000, price: normalizedValue };
     });
-  }, [sampled, currency, usdToBrl]);
+  }, [sampled, currency, usdToBrl, unit]);
 
-  const hasEnough = windowed.length >= 12;
+  const hasEnough = windowed.length >= 2;
   const yPad = currency === "USD" ? 10 : 50;
+  const renderData =
+    chartData.length === 1
+      ? [{ ...chartData[0], ts: chartData[0].ts - 1000 }, chartData[0]]
+      : chartData;
   
 
   // label atual do dropdown longo
@@ -239,20 +266,35 @@ export default function MetalClient() {
             <div className="text-2xl font-semibold">{m?.name ?? symbol}</div>
           </div>
 
-          {/* Toggle USD/BRL */}
-          <div className="flex rounded-xl2 border border-white/10 bg-white/5 p-1">
-            {(["USD", "BRL"] as const).map((c) => (
-              <button
-                key={c}
-                onClick={() => setCurrency(c)}
-                className={[
-                  "px-3 py-1 text-xs rounded-xl2 transition",
-                  currency === c ? "bg-white/10 border border-white/10" : "hover:bg-white/10",
-                ].join(" ")}
-              >
-                {c}
-              </button>
-            ))}
+          <div className="flex items-center gap-2">
+            <div className="flex rounded-xl2 border border-white/10 bg-white/5 p-1">
+              {(["USD", "BRL"] as const).map((c) => (
+                <button
+                  key={c}
+                  onClick={() => setCurrency(c)}
+                  className={[
+                    "px-3 py-1 text-xs rounded-xl2 transition",
+                    currency === c ? "bg-white/10 border border-white/10" : "hover:bg-white/10",
+                  ].join(" ")}
+                >
+                  {c}
+                </button>
+              ))}
+            </div>
+            <div className="flex rounded-xl2 border border-white/10 bg-white/5 p-1">
+              {(["oz", "g"] as const).map((u) => (
+                <button
+                  key={u}
+                  onClick={() => setUnit(u)}
+                  className={[
+                    "px-3 py-1 text-xs rounded-xl2 transition uppercase",
+                    unit === u ? "bg-white/10 border border-white/10" : "hover:bg-white/10",
+                  ].join(" ")}
+                >
+                  {u}
+                </button>
+              ))}
+            </div>
           </div>
         </div>
 
@@ -304,7 +346,7 @@ export default function MetalClient() {
 
           <div>
             <div className="text-xs muted">Histórico</div>
-            <div className="text-sm">{series.length} pontos</div>
+            <div className="text-sm">{rawWindowed.length} pontos reais</div>
             <div className="text-xs muted">janela: {windowKey}</div>
           </div>
         </div>
@@ -312,10 +354,10 @@ export default function MetalClient() {
 
       <div className="glass rounded-xl2 p-5">
         <div className="flex items-baseline justify-between">
-          <h2 className="text-lg font-semibold">Gráfico ({currency}/oz)</h2>
+          <h2 className="text-lg font-semibold">Gráfico ({currency}/{unit})</h2>
           <div className="text-xs muted">
-            {chartData.length} renderizados{shouldDownsample ? " (agregado)" : ""} • janela tem{" "}
-            {windowed.length} pontos reais
+            {renderData.length} renderizados{shouldDownsample ? " (agregado)" : ""} • janela tem{" "}
+            {rawWindowed.length} pontos reais
           </div>
         </div>
 
@@ -404,7 +446,7 @@ export default function MetalClient() {
         ) : (
           <div className="mt-4 h-80">
             <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={chartData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+              <AreaChart data={renderData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
                 <defs>
                   <linearGradient id="goldFill" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="0%" stopColor="rgba(216,189,113,0.45)" />
@@ -434,7 +476,7 @@ export default function MetalClient() {
                   tickLine={{ stroke: "rgba(255,255,255,0.12)" }}
                   width={72}
                   tickFormatter={(v) =>
-                    currency === "USD" ? `$${Number(v).toFixed(0)}` : `R$ ${Number(v).toFixed(0)}`
+                    currency === "USD" ? `$${Number(v).toFixed(2)}` : `R$ ${Number(v).toFixed(2)}`
                   }
                 />
 
@@ -446,7 +488,7 @@ export default function MetalClient() {
                   }}
                   labelStyle={{ color: "rgba(255,255,255,0.70)" }}
                   labelFormatter={(v) => new Date(Number(v)).toLocaleString("pt-BR")}
-                  formatter={(v) => [formatMoney(Number(v), currency, 2), `${currency}/oz`]}
+                  formatter={(v) => [formatMoney(Number(v), currency, unit === "g" ? 4 : 2), `${currency}/${unit}`]}
                 />
 
                 <Area
@@ -464,8 +506,8 @@ export default function MetalClient() {
         )}
 
         <div className="mt-3 text-xs muted">
-          Fonte: <code className="text-white/80">public/data/{symbol}.json</code> • conversão via{" "}
-          <code className="text-white/80">latest.json</code>
+          Fonte: <code className="text-white/80">/api/live/latest</code> +{" "}
+          <code className="text-white/80">public/data/{symbol}.json</code> (fallback/histórico)
         </div>
       </div>
     </main>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import {
@@ -40,7 +40,7 @@ type Latest = {
 
 type Currency = "USD" | "BRL";
 
-const UI_REFRESH_MS = 30_000;
+const UI_REFRESH_MS = 10_000;
 
 // Botões (somente < 24h)
 const SHORT_WINDOWS = [
@@ -118,33 +118,46 @@ export default function MetalClient() {
   const [series, setSeries] = useState<Point[]>([]);
   const [err, setErr] = useState<string | null>(null);
 
-  const load = async () => {
+  const load = useCallback(async () => {
     setErr(null);
     try {
       const base = basePath();
-      const [a, b] = await Promise.all([
+      const [liveRes, a, b] = await Promise.all([
+        fetch(`${base}/api/live/latest?ts=${Date.now()}`, { cache: "no-store" }),
         fetch(`${base}/data/latest.json?ts=${Date.now()}`, { cache: "no-store" }),
         fetch(`${base}/data/${symbol}.json?ts=${Date.now()}`, { cache: "no-store" }),
       ]);
 
-      if (!a.ok) throw new Error(`latest HTTP ${a.status}`);
       if (!b.ok) throw new Error(`series HTTP ${b.status}`);
 
-      const latestJson = (await a.json()) as Latest;
+      const latestJson =
+        liveRes.ok ? ((await liveRes.json()) as Latest) : ((await a.json()) as Latest);
       const seriesJson = (await b.json()) as Point[];
 
       setLatest(latestJson);
-      setSeries(Array.isArray(seriesJson) ? seriesJson : []);
+      const nextSeries = Array.isArray(seriesJson) ? [...seriesJson] : [];
+      const liveUsd = latestJson?.metals?.[symbol]?.usd_oz;
+      const liveTs = latestJson?.timestamp;
+      const last = nextSeries[nextSeries.length - 1];
+      if (
+        typeof liveUsd === "number" &&
+        Number.isFinite(liveUsd) &&
+        typeof liveTs === "number" &&
+        (!last || last.ts !== liveTs)
+      ) {
+        nextSeries.push({ ts: liveTs, usd_oz: liveUsd });
+      }
+      setSeries(nextSeries);
     } catch (e: any) {
       setErr(e?.message ?? "Erro ao carregar");
     }
-  };
+  }, [symbol]);
 
   useEffect(() => {
     load();
     const id = setInterval(load, UI_REFRESH_MS);
     return () => clearInterval(id);
-  }, [symbol]);
+  }, [load]);
 
   // fecha o dropdown ao clicar fora / ESC (sem quebrar os botões curtos)
   useEffect(() => {

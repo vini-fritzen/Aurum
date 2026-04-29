@@ -19,6 +19,7 @@ import {
   filterWindow,
   downsampleAvg,
   computeChange,
+  normalizeCadence,
   type Point,
 } from "@/lib/series";
 import { basePath } from "@/lib/base";
@@ -184,13 +185,14 @@ export default function MetalClient() {
     };
   }, [openLong]);
 
+  const normalizedSeries = useMemo(() => normalizeCadence(series, 10), [series]);
   const m = latest?.metals?.[symbol];
   const usdToBrl = latest?.usdToBrl ?? 0;
 
   // Variações baseadas no histórico em USD (percentual é o mesmo em BRL)
-  const chg1h = useMemo(() => computeChange(series, 60 * 60 * 1000), [series]);
-  const chg24h = useMemo(() => computeChange(series, 24 * 60 * 60 * 1000), [series]);
-  const chg7d = useMemo(() => computeChange(series, 7 * 24 * 60 * 60 * 1000), [series]);
+  const chg1h = useMemo(() => computeChange(normalizedSeries, 60 * 60 * 1000), [normalizedSeries]);
+  const chg24h = useMemo(() => computeChange(normalizedSeries, 24 * 60 * 60 * 1000), [normalizedSeries]);
+  const chg7d = useMemo(() => computeChange(normalizedSeries, 7 * 24 * 60 * 60 * 1000), [normalizedSeries]);
 
   // ======================
   // Janela + domínio X fixo (para “zoom” mudar só o bucket, não o período)
@@ -198,15 +200,15 @@ export default function MetalClient() {
   const windowCfg = WINDOWS.find((w) => w.key === windowKey) ?? WINDOWS[1];
 
   const latestMs = useMemo(() => {
-    const last = series[series.length - 1];
+    const last = normalizedSeries[normalizedSeries.length - 1];
     return last ? last.ts * 1000 : Date.now();
-  }, [series]);
+  }, [normalizedSeries]);
 
   const xDomain = useMemo<[number, number]>(() => {
     return [latestMs - windowCfg.ms, latestMs];
   }, [latestMs, windowCfg.ms]);
 
-  const windowed = useMemo(() => filterWindow(series, windowCfg.ms), [series, windowCfg.ms]);
+  const windowed = useMemo(() => filterWindow(normalizedSeries, windowCfg.ms), [normalizedSeries, windowCfg.ms]);
 
   // Downsample só quando virar “grande”
   const shouldDownsample = windowed.length > 250;

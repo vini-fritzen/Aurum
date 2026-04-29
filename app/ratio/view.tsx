@@ -14,7 +14,7 @@ import {
 
 import { basePath } from "@/lib/base";
 import { formatTime } from "@/lib/time";
-import { filterWindow, downsampleAvg, type Point } from "@/lib/series";
+import { filterWindow, downsampleAvg, normalizeCadence, type Point } from "@/lib/series";
 
 const UI_REFRESH_MS = 10_000;
 
@@ -177,17 +177,18 @@ export default function RatioClient() {
   }, [openLong]);
 
   const windowCfg = WINDOWS.find((w) => w.key === windowKey) ?? WINDOWS[7];
+  const normalizedSeries = useMemo(() => normalizeCadence(series, 10), [series]);
 
   const latestMs = useMemo(() => {
-    const last = series[series.length - 1];
+    const last = normalizedSeries[normalizedSeries.length - 1];
     return last ? last.ts * 1000 : Date.now();
-  }, [series]);
+  }, [normalizedSeries]);
 
   const xDomain = useMemo<[number, number]>(() => {
     return [latestMs - windowCfg.ms, latestMs];
   }, [latestMs, windowCfg.ms]);
 
-  const windowed = useMemo(() => filterWindow(series, windowCfg.ms), [series, windowCfg.ms]);
+  const windowed = useMemo(() => filterWindow(normalizedSeries, windowCfg.ms), [normalizedSeries, windowCfg.ms]);
   const shouldDownsample = windowed.length > 250;
 
   const sampled = useMemo(
@@ -227,9 +228,9 @@ export default function RatioClient() {
   }, [chartData]);
 
   const currentRatio = useMemo(() => {
-    const last = series[series.length - 1];
+    const last = normalizedSeries[normalizedSeries.length - 1];
     return typeof last?.usd_oz === "number" ? last.usd_oz : null;
-  }, [series]);
+  }, [normalizedSeries]);
 
   const lastUpdated = useMemo(() => formatTime(latestTs), [latestTs]);
 

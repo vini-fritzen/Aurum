@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import {
@@ -19,6 +19,7 @@ import {
   filterWindow,
   downsampleAvg,
   computeChange,
+  normalizeCadence,
   type Point,
 } from "@/lib/series";
 import { basePath } from "@/lib/base";
@@ -40,7 +41,7 @@ type Latest = {
 
 type Currency = "USD" | "BRL";
 
-const UI_REFRESH_MS = 30_000;
+const UI_REFRESH_MS = 10_000;
 
 // Botões (somente < 24h)
 const SHORT_WINDOWS = [
@@ -118,33 +119,46 @@ export default function MetalClient() {
   const [series, setSeries] = useState<Point[]>([]);
   const [err, setErr] = useState<string | null>(null);
 
-  const load = async () => {
+  const load = useCallback(async () => {
     setErr(null);
     try {
       const base = basePath();
-      const [a, b] = await Promise.all([
+      const [liveRes, a, b] = await Promise.all([
+        fetch(`${base}/api/live/latest?ts=${Date.now()}`, { cache: "no-store" }),
         fetch(`${base}/data/latest.json?ts=${Date.now()}`, { cache: "no-store" }),
         fetch(`${base}/data/${symbol}.json?ts=${Date.now()}`, { cache: "no-store" }),
       ]);
 
-      if (!a.ok) throw new Error(`latest HTTP ${a.status}`);
       if (!b.ok) throw new Error(`series HTTP ${b.status}`);
 
-      const latestJson = (await a.json()) as Latest;
+      const latestJson =
+        liveRes.ok ? ((await liveRes.json()) as Latest) : ((await a.json()) as Latest);
       const seriesJson = (await b.json()) as Point[];
 
       setLatest(latestJson);
-      setSeries(Array.isArray(seriesJson) ? seriesJson : []);
+      const nextSeries = Array.isArray(seriesJson) ? [...seriesJson] : [];
+      const liveUsd = latestJson?.metals?.[symbol]?.usd_oz;
+      const liveTs = latestJson?.timestamp;
+      const last = nextSeries[nextSeries.length - 1];
+      if (
+        typeof liveUsd === "number" &&
+        Number.isFinite(liveUsd) &&
+        typeof liveTs === "number" &&
+        (!last || last.ts !== liveTs)
+      ) {
+        nextSeries.push({ ts: liveTs, usd_oz: liveUsd });
+      }
+      setSeries(nextSeries);
     } catch (e: any) {
       setErr(e?.message ?? "Erro ao carregar");
     }
-  };
+  }, [symbol]);
 
   useEffect(() => {
     load();
     const id = setInterval(load, UI_REFRESH_MS);
     return () => clearInterval(id);
-  }, [symbol]);
+  }, [load]);
 
   // fecha o dropdown ao clicar fora / ESC (sem quebrar os botões curtos)
   useEffect(() => {
@@ -171,13 +185,14 @@ export default function MetalClient() {
     };
   }, [openLong]);
 
+  const normalizedSeries = useMemo(() => normalizeCadence(series, 10), [series]);
   const m = latest?.metals?.[symbol];
   const usdToBrl = latest?.usdToBrl ?? 0;
 
   // Variações baseadas no histórico em USD (percentual é o mesmo em BRL)
-  const chg1h = useMemo(() => computeChange(series, 60 * 60 * 1000), [series]);
-  const chg24h = useMemo(() => computeChange(series, 24 * 60 * 60 * 1000), [series]);
-  const chg7d = useMemo(() => computeChange(series, 7 * 24 * 60 * 60 * 1000), [series]);
+  const chg1h = useMemo(() => computeChange(normalizedSeries, 60 * 60 * 1000), [normalizedSeries]);
+  const chg24h = useMemo(() => computeChange(normalizedSeries, 24 * 60 * 60 * 1000), [normalizedSeries]);
+  const chg7d = useMemo(() => computeChange(normalizedSeries, 7 * 24 * 60 * 60 * 1000), [normalizedSeries]);
 
   // ======================
   // Janela + domínio X fixo (para “zoom” mudar só o bucket, não o período)
@@ -185,15 +200,15 @@ export default function MetalClient() {
   const windowCfg = WINDOWS.find((w) => w.key === windowKey) ?? WINDOWS[1];
 
   const latestMs = useMemo(() => {
-    const last = series[series.length - 1];
+    const last = normalizedSeries[normalizedSeries.length - 1];
     return last ? last.ts * 1000 : Date.now();
-  }, [series]);
+  }, [normalizedSeries]);
 
   const xDomain = useMemo<[number, number]>(() => {
     return [latestMs - windowCfg.ms, latestMs];
   }, [latestMs, windowCfg.ms]);
 
-  const windowed = useMemo(() => filterWindow(series, windowCfg.ms), [series, windowCfg.ms]);
+  const windowed = useMemo(() => filterWindow(normalizedSeries, windowCfg.ms), [normalizedSeries, windowCfg.ms]);
 
   // Downsample só quando virar “grande”
   const shouldDownsample = windowed.length > 250;
@@ -212,8 +227,12 @@ export default function MetalClient() {
     });
   }, [sampled, currency, usdToBrl]);
 
-  const hasEnough = windowed.length >= 12;
+  const hasEnough = windowed.length >= 2;
   const yPad = currency === "USD" ? 10 : 50;
+  const renderData =
+    chartData.length === 1
+      ? [{ ...chartData[0], ts: chartData[0].ts - 1000 }, chartData[0]]
+      : chartData;
   
 
   // label atual do dropdown longo
@@ -314,7 +333,7 @@ export default function MetalClient() {
         <div className="flex items-baseline justify-between">
           <h2 className="text-lg font-semibold">Gráfico ({currency}/oz)</h2>
           <div className="text-xs muted">
-            {chartData.length} renderizados{shouldDownsample ? " (agregado)" : ""} • janela tem{" "}
+            {renderData.length} renderizados{shouldDownsample ? " (agregado)" : ""} • janela tem{" "}
             {windowed.length} pontos reais
           </div>
         </div>
@@ -404,7 +423,7 @@ export default function MetalClient() {
         ) : (
           <div className="mt-4 h-80">
             <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={chartData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+              <AreaChart data={renderData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
                 <defs>
                   <linearGradient id="goldFill" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="0%" stopColor="rgba(216,189,113,0.45)" />
@@ -464,8 +483,8 @@ export default function MetalClient() {
         )}
 
         <div className="mt-3 text-xs muted">
-          Fonte: <code className="text-white/80">public/data/{symbol}.json</code> • conversão via{" "}
-          <code className="text-white/80">latest.json</code>
+          Fonte: <code className="text-white/80">/api/live/latest</code> +{" "}
+          <code className="text-white/80">public/data/{symbol}.json</code> (fallback/histórico)
         </div>
       </div>
     </main>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import {
   ResponsiveContainer,
@@ -14,9 +14,15 @@ import {
 
 import { basePath } from "@/lib/base";
 import { formatTime } from "@/lib/time";
-import { filterWindow, downsampleAvg, type Point } from "@/lib/series";
+import { filterWindow, downsampleAvg, normalizeCadence, type Point } from "@/lib/series";
+import { mergeSeries } from "@/lib/historyCache";
 
-const UI_REFRESH_MS = 30_000;
+const UI_REFRESH_MS = 3_000;
+
+type Latest = {
+  timestamp: number;
+  metals: Record<string, { usd_oz: number | null }>;
+};
 
 // Botões (somente < 24h)
 const SHORT_WINDOWS = [
@@ -67,24 +73,25 @@ export default function RatioClient() {
   // vamos usar Point[] reaproveitando usd_oz como "ratio"
   const [series, setSeries] = useState<Point[]>([]);
   const [err, setErr] = useState<string | null>(null);
+  const [latestTs, setLatestTs] = useState<number | null>(null);
 
   const [windowKey, setWindowKey] = useState<WindowKey>("1h");
   const [openLong, setOpenLong] = useState(false);
 
-  const load = async () => {
+  const load = useCallback(async () => {
     setErr(null);
     try {
       const base = basePath();
-      const [goldRes, silverRes] = await Promise.all([
-        fetch(`${base}/data/XAU.json?ts=${Date.now()}`, { cache: "no-store" }),
-        fetch(`${base}/data/XAG.json?ts=${Date.now()}`, { cache: "no-store" }),
+      const [liveRes, goldRes, silverRes] = await Promise.all([
+        fetch(`${base}/api/live/latest?ts=${Date.now()}`, { cache: "no-store" }),
+        fetch(`${base}/api/live/series/XAU?ts=${Date.now()}`, { cache: "no-store" }),
+        fetch(`${base}/api/live/series/XAG?ts=${Date.now()}`, { cache: "no-store" }),
       ]);
-
-      if (!goldRes.ok) throw new Error(`XAU HTTP ${goldRes.status}`);
-      if (!silverRes.ok) throw new Error(`XAG HTTP ${silverRes.status}`);
-
-      const gold = (await goldRes.json()) as Point[];
-      const silver = (await silverRes.json()) as Point[];
+      if (!goldRes.ok || !silverRes.ok) throw new Error("Histórico indisponível");
+      const goldRaw = (await goldRes.json()) as Point[];
+      const silverRaw = (await silverRes.json()) as Point[];
+      const gold = mergeSeries(goldRaw, []);
+      const silver = mergeSeries(silverRaw, []);
 
       // indexa prata por timestamp (segundos)
       const silverMap = new Map<number, number>();
@@ -115,17 +122,38 @@ export default function RatioClient() {
       }
 
       ratioSeries.sort((a, b) => a.ts - b.ts);
-      setSeries(ratioSeries);
+
+      if (liveRes.ok) {
+        const live = (await liveRes.json()) as Latest;
+        setLatestTs(live?.timestamp ?? null);
+        const xau = live?.metals?.XAU?.usd_oz;
+        const xag = live?.metals?.XAG?.usd_oz;
+        const ts = live?.timestamp;
+        const last = ratioSeries[ratioSeries.length - 1];
+        if (
+          typeof xau === "number" &&
+          typeof xag === "number" &&
+          xau > 0 &&
+          xag > 0 &&
+          typeof ts === "number" &&
+          (!last || last.ts !== ts)
+        ) {
+          ratioSeries.push({ ts, usd_oz: xau / xag });
+        }
+      }
+      if (!liveRes.ok) setLatestTs(ratioSeries.at(-1)?.ts ?? null);
+
+      setSeries(mergeSeries(ratioSeries, []));
     } catch (e: any) {
       setErr(e?.message ?? "Erro ao montar série do ratio");
     }
-  };
+  }, []);
 
   useEffect(() => {
     load();
     const id = setInterval(load, UI_REFRESH_MS);
     return () => clearInterval(id);
-  }, []);
+  }, [load]);
 
   // fecha dropdown ao clicar fora / ESC
   useEffect(() => {
@@ -149,17 +177,19 @@ export default function RatioClient() {
   }, [openLong]);
 
   const windowCfg = WINDOWS.find((w) => w.key === windowKey) ?? WINDOWS[7];
+  const normalizedSeries = useMemo(() => normalizeCadence(series, 5), [series]);
 
   const latestMs = useMemo(() => {
-    const last = series[series.length - 1];
+    const last = normalizedSeries[normalizedSeries.length - 1];
     return last ? last.ts * 1000 : Date.now();
-  }, [series]);
+  }, [normalizedSeries]);
 
   const xDomain = useMemo<[number, number]>(() => {
     return [latestMs - windowCfg.ms, latestMs];
   }, [latestMs, windowCfg.ms]);
 
-  const windowed = useMemo(() => filterWindow(series, windowCfg.ms), [series, windowCfg.ms]);
+  const windowed = useMemo(() => filterWindow(normalizedSeries, windowCfg.ms), [normalizedSeries, windowCfg.ms]);
+  const rawWindowed = useMemo(() => filterWindow(series, windowCfg.ms), [series, windowCfg.ms]);
   const shouldDownsample = windowed.length > 250;
 
   const sampled = useMemo(
@@ -199,11 +229,11 @@ export default function RatioClient() {
   }, [chartData]);
 
   const currentRatio = useMemo(() => {
-    const last = series[series.length - 1];
+    const last = normalizedSeries[normalizedSeries.length - 1];
     return typeof last?.usd_oz === "number" ? last.usd_oz : null;
-  }, [series]);
+  }, [normalizedSeries]);
 
-  const lastUpdated = useMemo(() => formatTime(series.at(-1)?.ts ?? null), [series]);
+  const lastUpdated = useMemo(() => formatTime(latestTs), [latestTs]);
 
   // dropdown mostra o selecionado (>=24h)
   const longSelectValue: (typeof LONG_WINDOWS)[number]["key"] =
@@ -211,15 +241,11 @@ export default function RatioClient() {
   const longLabel = LONG_WINDOWS.find((w) => w.key === longSelectValue)?.label ?? "24h";
 
   // mínimo de pontos por janela (curtas aceitam menos)
-  const minPoints =
-    windowKey === "30m" ? 3 :
-    windowKey === "1h" ? 4 :
-    windowKey === "3h" ? 6 :
-    windowKey === "6h" ? 8 :
-    windowKey === "12h" ? 10 :
-    12;
-
-  const hasEnough = windowed.length >= minPoints;
+  const hasEnough = windowed.length >= 2;
+  const renderData =
+    chartData.length === 1
+      ? [{ ...chartData[0], ts: chartData[0].ts - 1000 }, chartData[0]]
+      : chartData;
 
   return (
     <main className="mx-auto max-w-6xl px-4 py-8 space-y-6">
@@ -259,8 +285,8 @@ export default function RatioClient() {
         <div className="flex items-baseline justify-between">
           <h2 className="text-lg font-semibold">Histórico</h2>
           <div className="text-xs muted">
-            {chartData.length} renderizados{shouldDownsample ? " (agregado)" : ""} • janela tem{" "}
-            {windowed.length} pontos reais
+            {renderData.length} renderizados{shouldDownsample ? " (agregado)" : ""} • janela tem{" "}
+            {rawWindowed.length} pontos reais
           </div>
         </div>
 
@@ -348,7 +374,7 @@ export default function RatioClient() {
         ) : (
           <div className="mt-4 h-96">
             <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={chartData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+              <AreaChart data={renderData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
                 <defs>
                   <linearGradient id="ratioFill" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="0%" stopColor="rgba(216,189,113,0.45)" />
@@ -406,8 +432,9 @@ export default function RatioClient() {
         )}
 
         <div className="mt-3 text-xs muted">
-          Fonte: <code className="text-white/80">public/data/XAU.json</code> +{" "}
-          <code className="text-white/80">public/data/XAG.json</code> (derivado em tempo de execução)
+          Fonte: <code className="text-white/80">/api/live/latest</code> +{" "}
+          <code className="text-white/80">public/data/XAU.json</code> +{" "}
+          <code className="text-white/80">public/data/XAG.json</code> (fallback/histórico)
         </div>
       </div>
     </main>

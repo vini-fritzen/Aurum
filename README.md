@@ -22,7 +22,7 @@ https://vini-fritzen.github.io/Aurum/
 - 📈 Gráficos históricos interativos
   - 30m, 1h, 3h, 6h, 12h, 24h
   - 7d, 30d, 90d
-- ⚡ Atualização em tempo real no cliente (~10s)
+- ⚡ Atualização em tempo real no cliente (~3s)
 - 🛟 Fallback automático para JSON estático (~5 min via GitHub Actions)
 - 🧮 **Gold / Silver Ratio**
   - Valor atual
@@ -51,7 +51,7 @@ https://vini-fritzen.github.io/Aurum/ratio/
 - Sem chaves no frontend
 
 ### Fluxo:
-1. Frontend consulta APIs de metais + câmbio em tempo real (~10s)
+1. Frontend consulta APIs de metais + câmbio em tempo real (~3s)
 2. Se houver falha externa, o app usa JSON estático em `public/data`
 3. GitHub Actions continua atualizando o fallback (~5 min)
 

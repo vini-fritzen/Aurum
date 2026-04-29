@@ -10,7 +10,7 @@ import { type LiveLatest } from "@/lib/live";
 
 type Latest = LiveLatest;
 
-const UI_REFRESH_MS = 10_000;
+const UI_REFRESH_MS = 3_000;
 
 export function Dashboard() {
   // loading: usado apenas no primeiro carregamento (skeleton)

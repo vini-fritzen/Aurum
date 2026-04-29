@@ -41,7 +41,7 @@ type Latest = {
 
 type Currency = "USD" | "BRL";
 
-const UI_REFRESH_MS = 10_000;
+const UI_REFRESH_MS = 3_000;
 
 // Botões (somente < 24h)
 const SHORT_WINDOWS = [
@@ -185,7 +185,7 @@ export default function MetalClient() {
     };
   }, [openLong]);
 
-  const normalizedSeries = useMemo(() => normalizeCadence(series, 10), [series]);
+  const normalizedSeries = useMemo(() => normalizeCadence(series, 5), [series]);
   const m = latest?.metals?.[symbol];
   const usdToBrl = latest?.usdToBrl ?? 0;
 

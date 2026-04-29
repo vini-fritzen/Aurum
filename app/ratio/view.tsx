@@ -16,7 +16,7 @@ import { basePath } from "@/lib/base";
 import { formatTime } from "@/lib/time";
 import { filterWindow, downsampleAvg, normalizeCadence, type Point } from "@/lib/series";
 
-const UI_REFRESH_MS = 10_000;
+const UI_REFRESH_MS = 3_000;
 
 type Latest = {
   timestamp: number;
@@ -177,7 +177,7 @@ export default function RatioClient() {
   }, [openLong]);
 
   const windowCfg = WINDOWS.find((w) => w.key === windowKey) ?? WINDOWS[7];
-  const normalizedSeries = useMemo(() => normalizeCadence(series, 10), [series]);
+  const normalizedSeries = useMemo(() => normalizeCadence(series, 5), [series]);
 
   const latestMs = useMemo(() => {
     const last = normalizedSeries[normalizedSeries.length - 1];

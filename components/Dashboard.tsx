@@ -6,25 +6,11 @@ import { MetalCard } from "@/components/MetalCard";
 import { RatioCard } from "@/components/RatioCard";
 import { formatTime } from "@/lib/time";
 import { basePath } from "@/lib/base";
+import { type LiveLatest } from "@/lib/live";
 
-type Latest = {
-  timestamp: number;
-  usdToBrl: number;
-  metals: Record<
-    string,
-    {
-      name: string;
-      usd_oz: number | null;
-      usd_g: number | null;
-      brl_oz: number | null;
-      brl_g: number | null;
-      chg_1h: number | null;
-      chg_24h: number | null;
-    }
-  >;
-};
+type Latest = LiveLatest;
 
-const UI_REFRESH_MS = 30_000;
+const UI_REFRESH_MS = 10_000;
 
 export function Dashboard() {
   // loading: usado apenas no primeiro carregamento (skeleton)
@@ -45,14 +31,25 @@ export function Dashboard() {
 
     try {
       const base = basePath();
-      const res = await fetch(`${base}/data/latest.json?ts=${Date.now()}`, {
+      const apiRes = await fetch(`${base}/api/live/latest?ts=${Date.now()}`, {
         cache: "no-store",
       });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const data = (await res.json()) as Latest;
-      setLatest(data);
-    } catch (e: any) {
-      setErr(e?.message ?? "Erro ao carregar dados");
+
+      if (!apiRes.ok) throw new Error(`Live API HTTP ${apiRes.status}`);
+      const liveData = (await apiRes.json()) as Latest;
+      setLatest(liveData);
+    } catch {
+      try {
+        const base = basePath();
+        const res = await fetch(`${base}/data/latest.json?ts=${Date.now()}`, {
+          cache: "no-store",
+        });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = (await res.json()) as Latest;
+        setLatest(data);
+      } catch (e: any) {
+        setErr(e?.message ?? "Erro ao carregar dados");
+      }
     } finally {
       if (silent) setRefreshing(false);
       else setLoading(false);
@@ -108,8 +105,7 @@ export function Dashboard() {
           <div className="text-sm font-semibold">Não foi possível carregar</div>
           <div className="mt-1 text-sm muted">{err}</div>
           <div className="mt-4 text-xs muted">
-            Rode <code className="text-white/80">npm run fetch:data</code> para gerar{" "}
-            <code className="text-white/80">public/data</code>.
+            O app tenta cotações em tempo real e usa JSON local como fallback.
           </div>
         </div>
       ) : null}
@@ -138,13 +134,12 @@ export function Dashboard() {
         <div className="flex items-baseline justify-between">
           <h2 className="text-lg font-semibold">Como funciona</h2>
           <div className="text-xs muted">
-            UI: {Math.round(UI_REFRESH_MS / 1000)}s • Actions: ~5 min
+            UI: {Math.round(UI_REFRESH_MS / 1000)}s • Fallback estático: ~5 min
           </div>
         </div>
         <div className="mt-3 text-sm muted leading-relaxed">
-          O GitHub Actions coleta preços e câmbio, salva histórico em{" "}
-          <code className="text-white/80">public/data</code> e o site só lê esses JSONs.
-          Sem banco, sem localStorage, sem chave.
+          O app consulta APIs de preço e câmbio em tempo real no cliente.
+          Se a API externa falhar, ele recorre aos JSONs de <code className="text-white/80">public/data</code>.
         </div>
       </div>
     </div>

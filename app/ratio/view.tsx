@@ -16,7 +16,6 @@ import { basePath } from "@/lib/base";
 import { formatTime } from "@/lib/time";
 import { filterWindow, downsampleAvg, normalizeCadence, type Point } from "@/lib/series";
 import { mergeSeries, readCachedSeries, writeCachedSeries } from "@/lib/historyCache";
-import { fetchSeriesWithRemoteFallback } from "@/lib/historySource";
 
 const UI_REFRESH_MS = 3_000;
 
@@ -83,11 +82,14 @@ export default function RatioClient() {
     setErr(null);
     try {
       const base = basePath();
-      const [liveRes, goldRaw, silverRaw] = await Promise.all([
+      const [liveRes, goldRes, silverRes] = await Promise.all([
         fetch(`${base}/api/live/latest?ts=${Date.now()}`, { cache: "no-store" }),
-        fetchSeriesWithRemoteFallback("XAU"),
-        fetchSeriesWithRemoteFallback("XAG"),
+        fetch(`${base}/api/live/series/XAU?ts=${Date.now()}`, { cache: "no-store" }),
+        fetch(`${base}/api/live/series/XAG?ts=${Date.now()}`, { cache: "no-store" }),
       ]);
+      if (!goldRes.ok || !silverRes.ok) throw new Error("Histórico indisponível");
+      const goldRaw = (await goldRes.json()) as Point[];
+      const silverRaw = (await silverRes.json()) as Point[];
       const gold = mergeSeries(goldRaw, readCachedSeries("XAU"));
       const silver = mergeSeries(silverRaw, readCachedSeries("XAG"));
 

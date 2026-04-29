@@ -16,6 +16,7 @@ import { basePath } from "@/lib/base";
 import { formatTime } from "@/lib/time";
 import { filterWindow, downsampleAvg, normalizeCadence, type Point } from "@/lib/series";
 import { mergeSeries, readCachedSeries, writeCachedSeries } from "@/lib/historyCache";
+import { fetchSeriesWithRemoteFallback } from "@/lib/historySource";
 
 const UI_REFRESH_MS = 3_000;
 
@@ -82,17 +83,13 @@ export default function RatioClient() {
     setErr(null);
     try {
       const base = basePath();
-      const [liveRes, goldRes, silverRes] = await Promise.all([
+      const [liveRes, goldRaw, silverRaw] = await Promise.all([
         fetch(`${base}/api/live/latest?ts=${Date.now()}`, { cache: "no-store" }),
-        fetch(`${base}/data/XAU.json?ts=${Date.now()}`, { cache: "no-store" }),
-        fetch(`${base}/data/XAG.json?ts=${Date.now()}`, { cache: "no-store" }),
+        fetchSeriesWithRemoteFallback("XAU"),
+        fetchSeriesWithRemoteFallback("XAG"),
       ]);
-
-      if (!goldRes.ok) throw new Error(`XAU HTTP ${goldRes.status}`);
-      if (!silverRes.ok) throw new Error(`XAG HTTP ${silverRes.status}`);
-
-      const gold = mergeSeries((await goldRes.json()) as Point[], readCachedSeries("XAU"));
-      const silver = mergeSeries((await silverRes.json()) as Point[], readCachedSeries("XAG"));
+      const gold = mergeSeries(goldRaw, readCachedSeries("XAU"));
+      const silver = mergeSeries(silverRaw, readCachedSeries("XAG"));
 
       // indexa prata por timestamp (segundos)
       const silverMap = new Map<number, number>();

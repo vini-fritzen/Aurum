@@ -25,6 +25,7 @@ import {
 } from "@/lib/series";
 import { basePath } from "@/lib/base";
 import { mergeSeries, readCachedSeries, writeCachedSeries } from "@/lib/historyCache";
+import { fetchSeriesWithRemoteFallback } from "@/lib/historySource";
 
 type Latest = {
   timestamp: number;
@@ -127,17 +128,14 @@ export default function MetalClient() {
     setErr(null);
     try {
       const base = basePath();
-      const [liveRes, a, b] = await Promise.all([
+      const [liveRes, a, seriesJson] = await Promise.all([
         fetch(`${base}/api/live/latest?ts=${Date.now()}`, { cache: "no-store" }),
         fetch(`${base}/data/latest.json?ts=${Date.now()}`, { cache: "no-store" }),
-        fetch(`${base}/data/${symbol}.json?ts=${Date.now()}`, { cache: "no-store" }),
+        fetchSeriesWithRemoteFallback(symbol),
       ]);
-
-      if (!b.ok) throw new Error(`series HTTP ${b.status}`);
 
       const latestJson =
         liveRes.ok ? ((await liveRes.json()) as Latest) : ((await a.json()) as Latest);
-      const seriesJson = (await b.json()) as Point[];
 
       setLatest(latestJson);
       const nextSeries = mergeSeries(Array.isArray(seriesJson) ? seriesJson : [], readCachedSeries(symbol));
